@@ -1,6 +1,6 @@
 // MapWithFog.jsx
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer, Circle, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -51,6 +51,17 @@ const FogLayer = ({ revealedAreas, fogOpacity }) => {
       fillOpacity: fogOpacity,
       fillRule: "evenodd", // Важливо для роботи отворів
     }).addTo(map);
+
+    // Додаємо градієнт для краю прозорого отвору
+    revealedAreas.forEach(({ lat, lng, radius }) => {
+      L.circle([lat, lng], {
+        radius,
+        color: "rgba(0, 0, 0, 0.5)",
+        weight: 1,
+        fillOpacity: 0,
+        pane: "fogPane",
+      }).addTo(map);
+    });
 
     // Оновлюємо туман при зміні карти
     const onMoveEnd = () => {
@@ -131,6 +142,9 @@ const MapWithFog = () => {
   const [radius, setRadius] = useState(50);
   const [fogOpacity, setFogOpacity] = useState(0.7);
   const [revealedAreas, setRevealedAreas] = useState([]);
+  const [autoUpdate, setAutoUpdate] = useState(false);
+  const [updateCount, setUpdateCount] = useState(0);
+  const intervalRef = useRef(null);
 
   const updatePosition = () => {
     if (!navigator.geolocation) {
@@ -149,6 +163,8 @@ const MapWithFog = () => {
           ...areas,
           { lat: latitude, lng: longitude, radius },
         ]);
+
+        setUpdateCount((count) => count + 1);
       },
       (err) => {
         console.error("Помилка отримання геолокації:", err);
@@ -161,9 +177,14 @@ const MapWithFog = () => {
   };
 
   useEffect(() => {
-    // Виконуємо перше оновлення позиції
-    updatePosition();
-  }, [radius]);
+    if (autoUpdate) {
+      intervalRef.current = setInterval(updatePosition, 1000);
+    } else {
+      clearInterval(intervalRef.current);
+    }
+
+    return () => clearInterval(intervalRef.current);
+  }, [autoUpdate]);
 
   return (
     <div>
@@ -213,6 +234,17 @@ const MapWithFog = () => {
         >
           Показати моє місцезнаходження
         </button>
+        <br />
+        <button
+          onClick={() => setAutoUpdate((prev) => !prev)}
+          style={{ marginTop: "5px" }}
+        >
+          {autoUpdate
+            ? "Зупинити автоматичне оновлення"
+            : "Запустити автоматичне оновлення"}
+        </button>
+        <br />
+        <span>Кількість оновлень геопозиції: {updateCount}</span>
       </div>
       <MapContainer
         center={position || [50.4501, 30.5234]}
