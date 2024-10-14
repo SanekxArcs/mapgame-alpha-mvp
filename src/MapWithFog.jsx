@@ -1,129 +1,51 @@
 // MapWithFog.jsx
 
 import React, { useState, useEffect, useRef } from "react";
-import { MapContainer, TileLayer, Circle, useMap } from "react-leaflet";
-import L from "leaflet";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-// Виправлення для іконок Leaflet
-delete L.Icon.Default.prototype._getIconUrl;
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-  iconUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-  shadowUrl:
-    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-});
-
-const FogLayer = ({ revealedAreas, fogOpacity }) => {
-  const map = useMap();
-  const fogPolygonRef = useRef(null);
-
-  useEffect(() => {
-    const fogPane = map.getPane("fogPane") || map.createPane("fogPane");
-    fogPane.style.zIndex = 500;
-    fogPane.style.pointerEvents = "none";
-
-    const updateFogLayer = () => {
-      if (fogPolygonRef.current) {
-        map.removeLayer(fogPolygonRef.current);
-      }
-
-      // Отримуємо координати зовнішнього полігону (всього екрану)
-      const bounds = map.getBounds();
-      const outerRing = [
-        [bounds.getSouthWest().lat, bounds.getSouthWest().lng],
-        [bounds.getNorthWest().lat, bounds.getNorthWest().lng],
-        [bounds.getNorthEast().lat, bounds.getNorthEast().lng],
-        [bounds.getSouthEast().lat, bounds.getSouthEast().lng],
-      ];
-
-      // Створюємо отвори для відкритих областей
-      const holes = revealedAreas.map(({ lat, lng, radius }) => {
-        const circlePoints = generateCirclePoints([lat, lng], radius, 64);
-        return circlePoints;
-      });
-
-      // Комбінуємо зовнішній полігон і отвори
-      const polygonLatLngs = [outerRing, ...holes];
-
-      // Створюємо полігон туману з отворами
-      fogPolygonRef.current = L.polygon(polygonLatLngs, {
-        pane: "fogPane",
-        color: "#000",
-        weight: 0,
-        fillOpacity: fogOpacity,
-        fillRule: "evenodd", // Важливо для роботи отворів
-      }).addTo(map);
-
-      // Додаємо градієнт для краю прозорого отвору
-      revealedAreas.forEach(({ lat, lng, radius }) => {
-        L.circle([lat, lng], {
-          radius,
-          color: "rgba(0, 0, 0, 0.5)",
-          weight: 1,
-          fillOpacity: 0,
-          pane: "fogPane",
-        }).addTo(map);
-      });
-    };
-
-    updateFogLayer();
-
-    map.on("moveend", updateFogLayer);
-
-    return () => {
-      map.off("moveend", updateFogLayer);
-      if (fogPolygonRef.current) {
-        map.removeLayer(fogPolygonRef.current);
-      }
-    };
-  }, [map, revealedAreas, fogOpacity]);
-
-  return null;
-};
-
-// Функція для генерації точок кола
-function generateCirclePoints(centerLatLng, radiusInMeters, numPoints = 64) {
-  const latlngs = [];
-  const centerLat = centerLatLng[0];
-  const centerLng = centerLatLng[1];
-  const earthRadius = 6371000; // Радіус Землі в метрах
-
-  for (let i = 0; i <= numPoints; i++) {
-    const angle = (i / numPoints) * Math.PI * 2;
-    const dx = radiusInMeters * Math.cos(angle);
-    const dy = radiusInMeters * Math.sin(angle);
-
-    const deltaLat = (dy / earthRadius) * (180 / Math.PI);
-    const deltaLng =
-      (dx / (earthRadius * Math.cos((centerLat * Math.PI) / 180))) *
-      (180 / Math.PI);
-
-    const lat = centerLat + deltaLat;
-    const lng = centerLng + deltaLng;
-
-    latlngs.push([lat, lng]);
-  }
-
-  return latlngs;
-}
-
-const CenterMapOnPosition = ({ position }) => {
+// CanvasOverlay компонент
+const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize }) => {
+  const canvasRef = useRef(null);
   const map = useMap();
 
   useEffect(() => {
-    if (position) {
-      console.log("Переміщуємо карту до:", position);
-      map.setView(position);
-    } else {
-      console.log("position недоступна");
-    }
-  }, [position, map]);
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    canvas.width = mapSize.width;
+    canvas.height = mapSize.height;
 
-  return null;
+    // Очищуємо попередній стан полотна
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Малюємо темний туман на всій карті
+    ctx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Створюємо отвори для розкритих областей
+    revealedAreas.forEach(({ lat, lng, radius }) => {
+      const point = map.latLngToContainerPoint([lat, lng]);
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI, false);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+    });
+  }, [revealedAreas, fogOpacity, mapSize]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        pointerEvents: "none",
+        zIndex: 400,
+      }}
+    />
+  );
 };
 
 const MapWithFog = () => {
@@ -175,6 +97,8 @@ const MapWithFog = () => {
 
     return () => clearInterval(intervalRef.current);
   }, [autoUpdate, updateInterval]);
+
+  const mapSize = { width: window.innerWidth, height: window.innerHeight };
 
   return (
     <div>
@@ -252,17 +176,11 @@ const MapWithFog = () => {
         style={{ height: "100vh", width: "100%" }}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        {position && (
-          <>
-            <Circle
-              center={position}
-              radius={5}
-              pathOptions={{ color: "blue" }}
-            />
-            <CenterMapOnPosition position={position} />
-          </>
-        )}
-        <FogLayer revealedAreas={revealedAreas} fogOpacity={fogOpacity} />
+        <CanvasOverlay
+          revealedAreas={revealedAreas}
+          fogOpacity={fogOpacity}
+          mapSize={mapSize}
+        />
       </MapContainer>
     </div>
   );
