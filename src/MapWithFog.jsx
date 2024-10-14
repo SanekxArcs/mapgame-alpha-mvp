@@ -96,7 +96,7 @@ const CenterMapOnPosition = ({ position }) => {
 
 const MapWithFog = () => {
   const [position, setPosition] = useState(null);
-  const [radius, setRadius] = useState(50);
+  const [radius, setRadius] = useState(20);
   const [fogOpacity, setFogOpacity] = useState(0.95);
   const [revealedAreas, setRevealedAreas] = useState(() => {
     const savedAreas = localStorage.getItem("revealedAreas");
@@ -172,11 +172,14 @@ const MapWithFog = () => {
 
   const mapSize = { width: window.innerWidth, height: window.innerHeight };
 
-  const personIcon = new L.Icon({
-    iconUrl: isWalking ? personIconWalking : personIconStanding,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-  });
+const personIcon = L.divIcon({
+  html: `<img src="${
+    isWalking ? personIconWalking : personIconStanding
+  }" style="width: 30px; height: 30px; border-radius: 100%;">`,
+  iconSize: [0, 0],
+  iconAnchor: [16, 16],
+});
+
 
   const ControlLayout = ({ label, value, onIncrease, onDecrease }) => (
     <div className="flex flex-col items-center w-full md:w-auto">
@@ -184,16 +187,16 @@ const MapWithFog = () => {
       <div className="flex gap-2 items-center">
         <button
           onClick={onDecrease}
-          className="w-10 h-10 grid place-content-center bg-gray-500 text-white font-black rounded-lg shadow hover:bg-gray-600 active:scale-95"
+          className="w-10 h-10 grid place-content-center bg-gray-500 text-white font-black rounded-full shadow hover:bg-gray-600 active:scale-95"
         >
           <Minus />
         </button>
-        <div className="grid place-content-center text-lg font-semibold w-10 h-10 bg-gray-100 text-gray-600 rounded-lg shadow">
+        <div className="grid place-content-center text-lg font-semibold w-10 h-10 bg-gray-100 text-gray-600 rounded-full shadow">
           {value}
         </div>
         <button
           onClick={onIncrease}
-          className="w-10 h-10 grid place-content-center bg-gray-500 text-white rounded-lg font-black shadow hover:bg-gray-600 active:scale-95"
+          className="w-10 h-10 grid place-content-center bg-gray-500 text-white rounded-full font-black shadow hover:bg-gray-600 active:scale-95"
         >
           <Plus />
         </button>
@@ -276,19 +279,19 @@ const MapWithFog = () => {
           />
           <button
             onClick={updatePosition}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 active:scale-95 w-full md:w-auto"
+            className="px-4 py-2 bg-blue-500 text-white rounded-full shadow hover:bg-blue-600 active:scale-95 w-full md:w-auto"
           >
             Update position
           </button>
           <button
             onClick={() => setAutoUpdate((prev) => !prev)}
-            className="px-4 py-2 bg-yellow-500 text-white rounded-lg shadow hover:bg-yellow-600 active:scale-95 w-full md:w-auto"
+            className="px-4 py-2 bg-yellow-500 text-white rounded-full shadow hover:bg-yellow-600 active:scale-95 w-full md:w-auto"
           >
             {autoUpdate
               ? `Stop auto update. Updates: ${updateCount}`
               : `Start auto update. Updates: ${updateCount}`}
           </button>
-          <div className="px-4 py-2 bg-emerald-500 text-white rounded-lg shadow hover:bg-yellow-600 active:scale-95 w-full md:w-auto text-sm font-medium text-center">
+          <div className="px-4 py-2 bg-emerald-500 text-white rounded-full shadow hover:bg-yellow-600 active:scale-95 w-full md:w-auto text-sm font-medium text-center">
             Points: {points}
           </div>
         </div>
