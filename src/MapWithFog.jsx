@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, useMap, CircleMarker } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 // CanvasOverlay компонент
-const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize }) => {
+const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize, radius }) => {
   const canvasRef = useRef(null);
   const map = useMap();
 
@@ -25,9 +25,9 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize }) => {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Створюємо отвори для розкритих областей з плавними градієнтними краями
-    revealedAreas.forEach(({ lat, lng, radius }) => {
+    revealedAreas.forEach(({ lat, lng }) => {
       const point = map.latLngToContainerPoint([lat, lng]);
-      const gradientRadius = radius * 5; // Зменшили радіус градієнта для більш плавного переходу всередину // Збільшили коефіцієнт для більш плавного градієнта // Збільшуємо радіус градієнта для плавніших країв
+      const gradientRadius = radius * 1; // Зменшили радіус градієнта для більш плавного переходу всередину // Збільшили коефіцієнт для більш плавного градієнта // Збільшуємо радіус градієнта для плавніших країв
       const gradient = ctx.createRadialGradient(
         point.x,
         point.y,
@@ -36,8 +36,8 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize }) => {
         point.y,
         gradientRadius
       );
-      gradient.addColorStop(0, `rgba(0, 0, 0, 0.3)`);
-      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      gradient.addColorStop(0, `rgba(0, 0, 0, ${fogOpacity})`);
+      gradient.addColorStop(1, "rgba(255, 255, 255, 00)");
 
       ctx.globalCompositeOperation = "destination-out";
       ctx.fillStyle = gradient;
@@ -115,12 +115,12 @@ const MapWithFog = () => {
   };
 
   useEffect(() => {
+    updatePosition(); // Оновлення позиції та центрування при завантаженні сторінки
     if (autoUpdate) {
       intervalRef.current = setInterval(updatePosition, updateInterval);
     } else {
       clearInterval(intervalRef.current);
     }
-
     return () => clearInterval(intervalRef.current);
   }, [autoUpdate, updateInterval]);
 
@@ -217,6 +217,7 @@ const MapWithFog = () => {
           revealedAreas={revealedAreas}
           fogOpacity={fogOpacity}
           mapSize={mapSize}
+          radius={radius}
         />
       </MapContainer>
     </div>
