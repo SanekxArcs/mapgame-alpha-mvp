@@ -6,8 +6,9 @@ import "leaflet/dist/leaflet.css";
 
 // CanvasOverlay компонент
 const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize, radius }) => {
-  const canvasRef = useRef(null);
   const map = useMap();
+  const zoom = map.getZoom();
+  const canvasRef = useRef(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -26,8 +27,9 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize, radius }) => {
 
     // Створюємо отвори для розкритих областей з плавними градієнтними краями
     revealedAreas.forEach(({ lat, lng }) => {
+      const adjustedRadius = radius / Math.pow(2, 15 - zoom); // Масштабуємо радіус залежно від рівня zoom
       const point = map.latLngToContainerPoint([lat, lng]);
-      const gradientRadius = radius * 1; // Зменшили радіус градієнта для більш плавного переходу всередину // Збільшили коефіцієнт для більш плавного градієнта // Збільшуємо радіус градієнта для плавніших країв
+      const gradientRadius = adjustedRadius * 1;
       const gradient = ctx.createRadialGradient(
         point.x,
         point.y,
@@ -36,8 +38,8 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize, radius }) => {
         point.y,
         gradientRadius
       );
-      gradient.addColorStop(0, `rgba(0, 0, 0, ${fogOpacity})`);
-      gradient.addColorStop(1, "rgba(255, 255, 255, 00)");
+      gradient.addColorStop(0, `rgba(0, 0, 0, ${fogOpacity * 0.5})`);
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
 
       ctx.globalCompositeOperation = "destination-out";
       ctx.fillStyle = gradient;
@@ -46,7 +48,7 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize, radius }) => {
       ctx.fill();
       ctx.globalCompositeOperation = "source-over";
     });
-  }, [revealedAreas, fogOpacity, mapSize]);
+  }, [revealedAreas, fogOpacity, mapSize, radius, zoom]);
 
   return (
     <canvas
