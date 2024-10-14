@@ -19,54 +19,19 @@ L.Icon.Default.mergeOptions({
 
 const FogLayer = ({ revealedAreas, fogOpacity }) => {
   const map = useMap();
+  const fogPolygonRef = useRef(null);
 
   useEffect(() => {
     const fogPane = map.getPane("fogPane") || map.createPane("fogPane");
     fogPane.style.zIndex = 500;
     fogPane.style.pointerEvents = "none";
 
-    // Отримуємо координати зовнішнього полігону (всього екрану)
-    const bounds = map.getBounds();
-    const outerRing = [
-      [bounds.getSouthWest().lat, bounds.getSouthWest().lng],
-      [bounds.getNorthWest().lat, bounds.getNorthWest().lng],
-      [bounds.getNorthEast().lat, bounds.getNorthEast().lng],
-      [bounds.getSouthEast().lat, bounds.getSouthEast().lng],
-    ];
+    const updateFogLayer = () => {
+      if (fogPolygonRef.current) {
+        map.removeLayer(fogPolygonRef.current);
+      }
 
-    // Створюємо отвори для відкритих областей
-    const holes = revealedAreas.map(({ lat, lng, radius }) => {
-      const circlePoints = generateCirclePoints([lat, lng], radius, 64);
-      return circlePoints;
-    });
-
-    // Комбінуємо зовнішній полігон і отвори
-    const polygonLatLngs = [outerRing, ...holes];
-
-    // Створюємо полігон туману з отворами
-    const fogPolygon = L.polygon(polygonLatLngs, {
-      pane: "fogPane",
-      color: "#000",
-      weight: 0,
-      fillOpacity: fogOpacity,
-      fillRule: "evenodd", // Важливо для роботи отворів
-    }).addTo(map);
-
-    // Додаємо градієнт для краю прозорого отвору
-    revealedAreas.forEach(({ lat, lng, radius }) => {
-      L.circle([lat, lng], {
-        radius,
-        color: "rgba(0, 0, 0, 0.5)",
-        weight: 1,
-        fillOpacity: 0,
-        pane: "fogPane",
-      }).addTo(map);
-    });
-
-    // Оновлюємо туман при зміні карти
-    const onMoveEnd = () => {
-      fogPolygon.remove();
-
+      // Отримуємо координати зовнішнього полігону (всього екрану)
       const bounds = map.getBounds();
       const outerRing = [
         [bounds.getSouthWest().lat, bounds.getSouthWest().lng],
@@ -75,21 +40,45 @@ const FogLayer = ({ revealedAreas, fogOpacity }) => {
         [bounds.getSouthEast().lat, bounds.getSouthEast().lng],
       ];
 
+      // Створюємо отвори для відкритих областей
       const holes = revealedAreas.map(({ lat, lng, radius }) => {
         const circlePoints = generateCirclePoints([lat, lng], radius, 64);
         return circlePoints;
       });
 
+      // Комбінуємо зовнішній полігон і отвори
       const polygonLatLngs = [outerRing, ...holes];
 
-      fogPolygon.setLatLngs(polygonLatLngs).addTo(map);
+      // Створюємо полігон туману з отворами
+      fogPolygonRef.current = L.polygon(polygonLatLngs, {
+        pane: "fogPane",
+        color: "#000",
+        weight: 0,
+        fillOpacity: fogOpacity,
+        fillRule: "evenodd", // Важливо для роботи отворів
+      }).addTo(map);
+
+      // Додаємо градієнт для краю прозорого отвору
+      revealedAreas.forEach(({ lat, lng, radius }) => {
+        L.circle([lat, lng], {
+          radius,
+          color: "rgba(0, 0, 0, 0.5)",
+          weight: 1,
+          fillOpacity: 0,
+          pane: "fogPane",
+        }).addTo(map);
+      });
     };
 
-    map.on("moveend", onMoveEnd);
+    updateFogLayer();
+
+    map.on("moveend", updateFogLayer);
 
     return () => {
-      map.off("moveend", onMoveEnd);
-      fogPolygon.remove();
+      map.off("moveend", updateFogLayer);
+      if (fogPolygonRef.current) {
+        map.removeLayer(fogPolygonRef.current);
+      }
     };
   }, [map, revealedAreas, fogOpacity]);
 
@@ -143,7 +132,7 @@ const MapWithFog = () => {
   const [fogOpacity, setFogOpacity] = useState(0.7);
   const [revealedAreas, setRevealedAreas] = useState([]);
   const [autoUpdate, setAutoUpdate] = useState(false);
-  const [updateInterval, setUpdateInterval] = useState(10000);
+  const [updateInterval, setUpdateInterval] = useState(1000);
   const [updateCount, setUpdateCount] = useState(0);
   const intervalRef = useRef(null);
 
@@ -259,7 +248,7 @@ const MapWithFog = () => {
       </div>
       <MapContainer
         center={position || [50.4501, 30.5234]}
-        zoom={1000}
+        zoom={15}
         style={{ height: "100vh", width: "100%" }}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
