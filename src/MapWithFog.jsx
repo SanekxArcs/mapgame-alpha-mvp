@@ -143,6 +143,7 @@ const MapWithFog = () => {
   const [fogOpacity, setFogOpacity] = useState(0.7);
   const [revealedAreas, setRevealedAreas] = useState([]);
   const [autoUpdate, setAutoUpdate] = useState(false);
+  const [updateInterval, setUpdateInterval] = useState(10000);
   const [updateCount, setUpdateCount] = useState(0);
   const intervalRef = useRef(null);
 
@@ -178,13 +179,13 @@ const MapWithFog = () => {
 
   useEffect(() => {
     if (autoUpdate) {
-      intervalRef.current = setInterval(updatePosition, 1000);
+      intervalRef.current = setInterval(updatePosition, updateInterval);
     } else {
       clearInterval(intervalRef.current);
     }
 
     return () => clearInterval(intervalRef.current);
-  }, [autoUpdate]);
+  }, [autoUpdate, updateInterval]);
 
   return (
     <div>
@@ -219,6 +220,16 @@ const MapWithFog = () => {
           />
         </label>
         <br />
+        <label>
+          Інтервал оновлення (мс): {updateInterval}
+          <input
+            type="number"
+            min="500"
+            value={updateInterval}
+            onChange={(e) => setUpdateInterval(Number(e.target.value))}
+          />
+        </label>
+        <br />
         <button onClick={updatePosition}>Оновити позицію</button>
         <button
           onClick={() => {
@@ -248,7 +259,7 @@ const MapWithFog = () => {
       </div>
       <MapContainer
         center={position || [50.4501, 30.5234]}
-        zoom={100}
+        zoom={1000}
         style={{ height: "100vh", width: "100%" }}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
