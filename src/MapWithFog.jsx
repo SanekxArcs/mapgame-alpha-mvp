@@ -1,7 +1,7 @@
 // MapWithFog.jsx
 
 import React, { useState, useEffect, useRef } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, useMap, CircleMarker } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 // CanvasOverlay компонент
@@ -20,15 +20,29 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize }) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Малюємо темний туман на всій карті
+    ctx.filter = "blur(0px)";
     ctx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Створюємо отвори для розкритих областей
+    // Створюємо отвори для розкритих областей з плавними градієнтними краями
     revealedAreas.forEach(({ lat, lng, radius }) => {
       const point = map.latLngToContainerPoint([lat, lng]);
+      const gradientRadius = radius * 5; // Зменшили радіус градієнта для більш плавного переходу всередину // Збільшили коефіцієнт для більш плавного градієнта // Збільшуємо радіус градієнта для плавніших країв
+      const gradient = ctx.createRadialGradient(
+        point.x,
+        point.y,
+        0,
+        point.x,
+        point.y,
+        gradientRadius
+      );
+      gradient.addColorStop(0, `rgba(0, 0, 0, 0.3)`);
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+
       ctx.globalCompositeOperation = "destination-out";
+      ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI, false);
+      ctx.arc(point.x, point.y, gradientRadius, 0, 2 * Math.PI, false);
       ctx.fill();
       ctx.globalCompositeOperation = "source-over";
     });
@@ -46,6 +60,18 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize }) => {
       }}
     />
   );
+};
+
+const CenterMapOnPosition = ({ position }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (position) {
+      map.setView(position, map.getZoom());
+    }
+  }, [position, map]);
+
+  return null;
 };
 
 const MapWithFog = () => {
@@ -148,6 +174,7 @@ const MapWithFog = () => {
           onClick={() => {
             if (position) {
               console.log("Центрування на позицію:", position);
+              setPosition(position);
             } else {
               alert(
                 'Позиція не доступна. Натисніть "Оновити позицію" та перевірте дозволи геолокації.'
@@ -176,6 +203,16 @@ const MapWithFog = () => {
         style={{ height: "100vh", width: "100%" }}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        {position && (
+          <>
+            <CircleMarker
+              center={position}
+              radius={8}
+              pathOptions={{ color: "blue", fillColor: "blue", fillOpacity: 1 }}
+            />
+            <CenterMapOnPosition position={position} />
+          </>
+        )}
         <CanvasOverlay
           revealedAreas={revealedAreas}
           fogOpacity={fogOpacity}
