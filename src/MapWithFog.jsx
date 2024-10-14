@@ -1,33 +1,24 @@
-// App.jsx
+// MapWithFog.jsx
 
-import React, { useState, useEffect } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Circle,
-  Pane,
-  useMapEvents,
-} from "react-leaflet";
+import React, { useState, useEffect, useRef } from "react";
+import { MapContainer, TileLayer, Circle, useMap } from "react-leaflet";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 
-const FogLayer = ({ revealedAreas }) => {
-  const map = useMapEvents({});
+const FogLayer = ({ revealedAreas, fogOpacity }) => {
+  const map = useMap();
 
   useEffect(() => {
-    const fogPane = map.createPane("fogPane");
+    const fogPane = map.getPane("fogPane") || map.createPane("fogPane");
     fogPane.style.zIndex = 500;
     fogPane.style.pointerEvents = "none";
 
-    // Створюємо повний чорний прямокутник, який покриває всю карту
     const fog = L.rectangle(map.getBounds(), {
       pane: "fogPane",
       color: "#000",
       weight: 0,
-      fillOpacity: 0.2,
+      fillOpacity: fogOpacity,
     }).addTo(map);
 
-    // Вирізаємо прозорі кола в місцях відкритих областей
     revealedAreas.forEach(({ lat, lng, radius }) => {
       const circle = L.circle([lat, lng], {
         radius,
@@ -38,54 +29,61 @@ const FogLayer = ({ revealedAreas }) => {
         fillOpacity: 0,
       }).addTo(map);
 
-      // Застосовуємо SVG-фільтр для вирізання отворів
       circle
         .getElement()
         .setAttribute("style", "mix-blend-mode: destination-out;");
     });
 
-    // Оновлюємо туман при зміні карти
-    map.on("moveend", () => {
+    const onMoveEnd = () => {
       fog.setBounds(map.getBounds());
-    });
+    };
+
+    map.on("moveend", onMoveEnd);
 
     return () => {
+      map.off("moveend", onMoveEnd);
       map.removeLayer(fog);
     };
-  }, [map, revealedAreas]);
+  }, [map, revealedAreas, fogOpacity]);
 
   return null;
 };
 
 const MapWithFog = () => {
   const [position, setPosition] = useState(null);
-  const [radius, setRadius] = useState(50); // Радіус у метрах
+  const [radius, setRadius] = useState(50);
+  const [fogOpacity, setFogOpacity] = useState(0.7);
   const [revealedAreas, setRevealedAreas] = useState([]);
+  const mapRef = useRef(null);
+
+  // Видаляємо щосекундне оновлення позиції
+  const updatePosition = () => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const newPosition = [latitude, longitude];
+        setPosition(newPosition);
+
+        setRevealedAreas((areas) => [
+          ...areas,
+          { lat: latitude, lng: longitude, radius },
+        ]);
+
+        // Центруємо карту на позиції користувача
+        if (mapRef.current) {
+          mapRef.current.setView(newPosition);
+        }
+      },
+      (err) => {
+        console.error(err);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
 
   useEffect(() => {
-    const updatePosition = () => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          setPosition([latitude, longitude]);
-
-          setRevealedAreas((areas) => [
-            ...areas,
-            { lat: latitude, lng: longitude, radius },
-          ]);
-        },
-        (err) => {
-          console.error(err);
-        },
-        { enableHighAccuracy: true },
-      );
-    };
-
-    // Оновлюємо геопозицію кожну секунду
+    // Виконуємо перше оновлення позиції
     updatePosition();
-    const interval = setInterval(updatePosition, 1000);
-
-    return () => clearInterval(interval);
   }, [radius]);
 
   return (
@@ -95,7 +93,7 @@ const MapWithFog = () => {
           position: "absolute",
           zIndex: 1000,
           padding: "10px",
-          background: "gray",
+          background: "white",
         }}
       >
         <label>
@@ -108,13 +106,27 @@ const MapWithFog = () => {
             onChange={(e) => setRadius(Number(e.target.value))}
           />
         </label>
+        <br />
+        <label>
+          Прозорість туману: {fogOpacity}
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            value={fogOpacity}
+            onChange={(e) => setFogOpacity(Number(e.target.value))}
+          />
+        </label>
+        <br />
+        <button onClick={updatePosition}>Оновити позицію</button>
       </div>
       <MapContainer
-        center={position || [50.4501, 30.5234]} // Якщо позиція ще не відома, центр на Києві
+        center={position || [50.4501, 30.5234]}
         zoom={15}
         style={{ height: "100vh", width: "100%" }}
         whenCreated={(map) => {
-          // Виправлення для відображення картки на мобільних пристроях
+          mapRef.current = map;
           setTimeout(() => {
             map.invalidateSize();
           }, 0);
@@ -128,7 +140,7 @@ const MapWithFog = () => {
             pathOptions={{ color: "blue" }}
           />
         )}
-        <FogLayer revealedAreas={revealedAreas} />
+        <FogLayer revealedAreas={revealedAreas} fogOpacity={fogOpacity} />
       </MapContainer>
     </div>
   );
