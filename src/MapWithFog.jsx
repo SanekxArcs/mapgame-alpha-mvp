@@ -1,5 +1,5 @@
 // Completed MapWithFog.jsx with Firestore Integration and Leaderboard Component
-import React, { useState, useEffect, useRef } from "react";
+import  { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer, useMap, Marker } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -20,6 +20,33 @@ import { saveUserProgress } from "./saveUserProgress";
 import { loadUserProgress } from "./loadUserProgress";
 import Leaderboard from "./Leaderboard";
 import { auth } from "./firebase";
+import { motion } from "framer-motion";
+import { getRedirectResult, GoogleAuthProvider } from "firebase/auth";
+
+const AnimatedMarker = ({ position, isWalking }) => {
+  return (
+    <motion.div
+      style={{
+        position: "absolute",
+        width: "30px",
+        height: "30px",
+        borderRadius: "50%",
+        backgroundImage: `url(${
+          isWalking ? personIconWalking : personIconStanding
+        })`,
+        backgroundSize: "cover",
+      }}
+      initial={{ x: position[0], y: position[1] }}
+      animate={{ x: position[0], y: position[1] }}
+      transition={{ duration: 1.5 }} // Плавний перехід з тривалістю 1.5 секунди
+    />
+  );
+};
+
+
+
+
+let worker = null;
 
 const handleSaveProgress = async (revealedAreas, points) => {
   const user = auth.currentUser;
@@ -69,38 +96,49 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize, radius }) => {
     canvas.width = mapSize.width;
     canvas.height = mapSize.height;
 
-    // Clear previous canvas state
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let animationFrameId;
 
-    // Draw dark fog over the entire map
-    ctx.filter = "blur(0px)";
-    ctx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const animateFog = () => {
+      // Очищуємо попередній стан canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Create holes for revealed areas with smooth gradient edges
-    revealedAreas.forEach(({ lat, lng }) => {
-      const adjustedRadius = radius / Math.pow(2, 15 - zoom); // Scale radius based on zoom level
-      const point = map.latLngToContainerPoint([lat, lng]);
-      const gradientRadius = adjustedRadius;
-      const gradient = ctx.createRadialGradient(
-        point.x,
-        point.y,
-        0,
-        point.x,
-        point.y,
-        gradientRadius
-      );
-      gradient.addColorStop(0, `rgba(0, 0, 0, ${fogOpacity})`);
-      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      // Малюємо туман на всій карті
+      ctx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, gradientRadius, 0, 2 * Math.PI, false);
-      ctx.fill();
-      ctx.globalCompositeOperation = "source-over";
-    });
-  }, [revealedAreas, fogOpacity, mapSize, radius, zoom]);
+      // Вирізаємо прозорі круги на місцях, де карта "відкрита"
+      revealedAreas.forEach(({ lat, lng }) => {
+        const adjustedRadius = radius / Math.pow(2, 15 - zoom); // Scale radius based on zoom level
+        const point = map.latLngToContainerPoint([lat, lng]);
+        const gradientRadius = adjustedRadius;
+        const gradient = ctx.createRadialGradient(
+          point.x,
+          point.y,
+          0,
+          point.x,
+          point.y,
+          gradientRadius
+        );
+        gradient.addColorStop(0, `rgba(0, 0, 0, ${fogOpacity})`);
+        gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, gradientRadius, 0, 2 * Math.PI, false);
+        ctx.fill();
+        ctx.globalCompositeOperation = "source-over";
+      });
+
+      animationFrameId = requestAnimationFrame(animateFog);
+    };
+
+    animateFog(); // Запускаємо анімацію
+
+    return () => {
+      cancelAnimationFrame(animationFrameId); // Очищаємо анімацію при виході
+    };
+  }, [revealedAreas, fogOpacity, mapSize, radius, map]);
 
   return (
     <canvas
@@ -121,7 +159,11 @@ const CenterMapOnPosition = ({ position }) => {
 
   useEffect(() => {
     if (position) {
-      map.setView(position, map.getZoom());
+      // Плавне переміщення до нової позиції з анімацією
+      map.setView(position, map.getZoom(), {
+        animate: true,
+        duration: 1.5, // Тривалість анімації в секундах
+      });
     }
   }, [position, map]);
 
@@ -147,6 +189,8 @@ const MapWithFog = () => {
   const intervalRef = useRef(null);
   const [isWalking, setIsWalking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+    const [lastUpdateTime, setLastUpdateTime] = useState(null); // Час останнього оновлення
+    const [smoothThreshold, setSmoothThreshold] = useState(10);
 
   const updatePosition = () => {
     if (!navigator.geolocation) {
@@ -154,39 +198,163 @@ const MapWithFog = () => {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const newPosition = [latitude, longitude];
-        setIsWalking(true);
-        setTimeout(() => setIsWalking(false), 1000); // Walking animation for 1 second
-        setPosition(newPosition);
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const { latitude, longitude } = pos.coords;
+      const newPosition = [latitude, longitude];
+      const currentTime = Date.now(); // Час поточного оновлення
 
-        setRevealedAreas((areas) => {
-          const isAreaRevealed = areas.some(
-            (area) =>
-              Math.abs(area.lat - latitude) < 0.0001 &&
-              Math.abs(area.lng - longitude) < 0.0001
-          );
-          if (!isAreaRevealed) {
-            setPoints((prevPoints) => prevPoints + 10); // Add 10 points for a new area
-            return [...areas, { lat: latitude, lng: longitude }];
-          }
-          return areas;
+      // Обчислюємо, скільки часу пройшло з моменту останнього оновлення
+      if (lastUpdateTime) {
+        const timeDiff = (currentTime - lastUpdateTime) / 1000; // У секундах
+        const isSmooth = timeDiff <= smoothThreshold;
+
+        // Плавне або різке переміщення
+        map.setView(newPosition, map.getZoom(), {
+          animate: isSmooth, // Якщо час між оновленнями менший за поріг, переміщення плавне
+          duration: isSmooth ? 1.5 : 0, // Якщо анімація плавна, тривалість 1.5 секунди, інакше різке переміщення
         });
+      } else {
+        // Якщо це перше оновлення, просто встановлюємо нову позицію
+        map.setView(newPosition, map.getZoom(), { animate: false });
+      }
 
-        setUpdateCount((count) => count + 1);
-      },
-      (err) => {
-        console.error("Error getting geolocation:", err);
-        alert(
-          "Failed to get your location. Please check your browser settings."
+      // Оновлюємо стан
+      setPosition(newPosition);
+      setLastUpdateTime(currentTime); // Зберігаємо час останнього оновлення
+
+      setRevealedAreas((areas) => {
+        const isAreaRevealed = areas.some(
+          (area) =>
+            Math.abs(area.lat - latitude) < 0.0001 &&
+            Math.abs(area.lng - longitude) < 0.0001
         );
-      },
-      { enableHighAccuracy: true }
-    );
+        if (!isAreaRevealed) {
+          return [...areas, { lat: latitude, lng: longitude }];
+        }
+        return areas;
+      });
+    });
   };
+  useEffect(() => {
+    // Обробляємо результат перенаправлення (тільки якщо було використано redirect)
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          setUserName(result.user.displayName); // Встановлюємо ім'я користувача
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to handle redirect result:", error);
+      });
+  }, []);
 
+  useEffect(() => {
+    const intervalId = setInterval(updatePosition, 5000); // Оновлення кожні 5 секунд
+    return () => clearInterval(intervalId);
+  }, [lastUpdateTime, smoothThreshold]);
+
+  //  const updatePosition = () => {
+  //    if (!navigator.geolocation) {
+  //      alert("Geolocation is not supported by your browser");
+  //      return;
+  //    }
+
+  //    navigator.geolocation.getCurrentPosition(
+  //      (pos) => {
+  //        const { latitude, longitude } = pos.coords;
+  //        const newPosition = [latitude, longitude];
+  //        setPosition(newPosition);
+
+  //        setRevealedAreas((areas) => {
+  //          const isAreaRevealed = areas.some(
+  //            (area) =>
+  //              Math.abs(area.lat - latitude) < 0.0001 &&
+  //              Math.abs(area.lng - longitude) < 0.0001
+  //          );
+  //          if (!isAreaRevealed) {
+  //            return [...areas, { lat: latitude, lng: longitude }];
+  //          }
+  //          return areas;
+  //        });
+  //      },
+  //      (err) => {
+  //        console.error("Error getting geolocation:", err);
+  //        alert(
+  //          "Failed to get your location. Please check your browser settings."
+  //        );
+  //      },
+  //      { enableHighAccuracy: true }
+  //    );
+  //  };
+
+   const startAutoUpdate = () => {
+     setAutoUpdate(true);
+     if (worker) {
+       worker.postMessage({ action: "start", updateInterval }); // Запускаємо оновлення через worker
+     }
+   };
+
+   const stopAutoUpdate = () => {
+     setAutoUpdate(false);
+     if (worker) {
+       worker.postMessage({ action: "stop" }); // Зупиняємо оновлення
+     }
+   };
+   useEffect(() => {
+     // Оновлюємо позицію гравця
+     const updatePosition = () => {
+       if (!navigator.geolocation) {
+         alert("Geolocation is not supported by your browser");
+         return;
+       }
+
+       navigator.geolocation.getCurrentPosition((pos) => {
+         const { latitude, longitude } = pos.coords;
+         setPosition([latitude, longitude]);
+
+         setRevealedAreas((areas) => {
+           const isAreaRevealed = areas.some(
+             (area) =>
+               Math.abs(area.lat - latitude) < 0.0001 &&
+               Math.abs(area.lng - longitude) < 0.0001
+           );
+           if (!isAreaRevealed) {
+             return [...areas, { lat: latitude, lng: longitude }];
+           }
+           return areas;
+         });
+       });
+     };
+
+     const intervalId = setInterval(updatePosition, 5000); // Оновлення кожні 5 секунд
+     return () => clearInterval(intervalId);
+   }, []);
+
+   useEffect(() => {
+     if (!autoUpdate) {
+       stopAutoUpdate(); // Зупиняємо, якщо автооновлення вимкнене
+     } else {
+       startAutoUpdate(); // Запускаємо, якщо автооновлення увімкнене
+     }
+   }, [autoUpdate]);
+
+  useEffect(() => {
+    if (typeof Worker !== "undefined") {
+      worker = new Worker("worker.js"); // Запускаємо Web Worker
+    }
+
+    // Слухаємо повідомлення від Web Worker для оновлення позиції
+    worker.onmessage = function (e) {
+      if (e.data.type === "updatePosition") {
+        updatePosition(); // Функція для оновлення позиції і очищення туману
+      }
+    };
+
+    return () => {
+      if (worker) worker.terminate(); // Зупиняємо Web Worker при виході
+    };
+  }, []);
+  
   useEffect(() => {
     updatePosition(); // Update position and center map on page load
     if (autoUpdate) {
@@ -335,6 +503,19 @@ const MapWithFog = () => {
           </button>
           <div className="w-full px-4 py-2 text-sm font-medium text-center text-white rounded-full shadow bg-emerald-500 hover:bg-yellow-600 active:scale-95 md:w-auto">
             Points: {points}
+          </div>
+          <div className="p-4 rounded shadow-lg">
+            <label>
+              плавного переміщення (секунди):
+              <input
+                type="number"
+                value={smoothThreshold}
+                onChange={(e) => setSmoothThreshold(Number(e.target.value))}
+                className="p-1 ml-2 border rounded"
+                min={0}
+                step={1}
+              />
+            </label>
           </div>
           <RefreshLeaderboardButton />
           <LoginButton setUserName={setUserName} />{" "}

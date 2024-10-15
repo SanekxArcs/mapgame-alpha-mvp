@@ -1,20 +1,33 @@
 import React, { useState } from "react";
-import { signInWithGoogle } from "./firebase"; // Adjust the path to your Firebase config
+import {
+  signInWithPopup,
+  signInWithRedirect,
+  GoogleAuthProvider,
+} from "firebase/auth";
 import { auth } from "./firebase";
 
 const LoginButton = ({ setUserName }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Перевіряємо, чи це мобільний пристрій
+  const isMobileDevice = () => {
+    return /Mobi|Android/i.test(navigator.userAgent);
+  };
+
   const handleSignIn = async () => {
     setLoading(true);
     setError(null);
+    const provider = new GoogleAuthProvider();
 
     try {
-      await signInWithGoogle(); // Perform Google sign-in
-      const user = auth.currentUser; // Retrieve the current logged-in user
-      if (user) {
-        setUserName(user.displayName); // Set the user's display name
+      if (isMobileDevice()) {
+        // Використовуємо перенаправлення на мобільних
+        await signInWithRedirect(auth, provider);
+      } else {
+        // Для десктопа використовуємо спливаюче вікно
+        const result = await signInWithPopup(auth, provider);
+        setUserName(result.user.displayName);
       }
     } catch (err) {
       setError("Failed to sign in. Please try again.");
