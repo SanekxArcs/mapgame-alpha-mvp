@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 // Completed MapWithFog.jsx with Firestore Integration and Leaderboard Component
 import  { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer, useMap, Marker } from "react-leaflet";

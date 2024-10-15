@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import  { useState } from "react";
 import {
   signInWithPopup,
   signInWithRedirect,
@@ -6,6 +6,7 @@ import {
 } from "firebase/auth";
 import { auth } from "./firebase";
 
+// eslint-disable-next-line react/prop-types
 const LoginButton = ({ setUserName }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
