@@ -21,6 +21,8 @@ import Leaderboard from "./Leaderboard";
 import { auth } from "./firebase";
 import { getRedirectResult, GoogleAuthProvider } from "firebase/auth";
 
+
+
 let worker = null;
 
 const handleSaveProgress = async (revealedAreas, points) => {
@@ -152,44 +154,34 @@ const MapWithFog = () => {
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const [smoothThreshold, setSmoothThreshold] = useState(1);
 
-  const updatePosition = () => {
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
-      return;
-    }
+const updatePosition = () => {
+  if (!navigator.geolocation) {
+    alert("Geolocation is not supported by your browser");
+    return;
+  }
 
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const { latitude, longitude } = pos.coords;
-      const newPosition = [latitude, longitude];
-      const currentTime = Date.now();
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const { latitude, longitude } = pos.coords;
+    setPosition([latitude, longitude]);
 
-      if (lastUpdateTime) {
-        const timeDiff = (currentTime - lastUpdateTime) / 1000;
-        const isSmooth = timeDiff <= smoothThreshold;
-
-        map.setView(newPosition, map.getZoom(), {
-          animate: isSmooth,
-          duration: isSmooth ? 1.5 : 0,
-        });
-      } else {
-        map.setView(newPosition, map.getZoom(), { animate: true });
+    // Додаємо логіку для оновлення відкритих зон
+    setRevealedAreas((areas) => {
+      const isAreaRevealed = areas.some(
+        (area) =>
+          Math.abs(area.lat - latitude) < 0.0001 &&
+          Math.abs(area.lng - longitude) < 0.0001
+      );
+      if (!isAreaRevealed) {
+        return [...areas, { lat: latitude, lng: longitude }];
       }
-
-      setPosition(newPosition);
-      setLastUpdateTime(currentTime);
-      setRevealedAreas((areas) => {
-        const isAreaRevealed = areas.some(
-          (area) =>
-            Math.abs(area.lat - latitude) < 0.0001 &&
-            Math.abs(area.lng - longitude) < 0.0001
-        );
-        if (!isAreaRevealed) {
-          return [...areas, { lat: latitude, lng: longitude }];
-        }
-        return areas;
-      });
+      return areas;
     });
-  };
+
+    // Оновлюємо кількість оновлень
+    setUpdateCount((prevCount) => prevCount + 1); // Збільшуємо на 1 при кожному оновленні
+  });
+};
+
 
   useEffect(() => {
     getRedirectResult(auth)
@@ -209,16 +201,16 @@ const MapWithFog = () => {
   }, [lastUpdateTime, smoothThreshold]);
 
   const startAutoUpdate = () => {
-    setAutoUpdate(true);
-    if (worker) {
-      worker.postMessage({ action: "start", updateInterval });
+    if (!autoUpdate) {
+      setAutoUpdate(true);
+      intervalRef.current = setInterval(updatePosition, updateInterval * 1000);
     }
   };
-
   const stopAutoUpdate = () => {
-    setAutoUpdate(false);
-    if (worker) {
-      worker.postMessage({ action: "stop" });
+    if (autoUpdate) {
+      setAutoUpdate(false);
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
   };
 
@@ -254,7 +246,7 @@ const MapWithFog = () => {
     } else {
       startAutoUpdate();
     }
-  }, [autoUpdate]);
+  }, [autoUpdate,]);
 
   useEffect(() => {
     if (typeof Worker !== "undefined") {
@@ -270,23 +262,31 @@ const MapWithFog = () => {
     };
   }, []);
 
+  // Використання useEffect для моніторингу змін у стані autoUpdate та інтервалу оновлення
   useEffect(() => {
-    updatePosition();
     if (autoUpdate) {
-      intervalRef.current = setInterval(updatePosition, updateInterval * 1000);
+      startAutoUpdate();
     } else {
-      clearInterval(intervalRef.current);
+      stopAutoUpdate();
     }
+
+    // Очищення інтервалу при розмонтаженні компонента або зміні інтервалу
     return () => clearInterval(intervalRef.current);
   }, [autoUpdate, updateInterval]);
 
-  useEffect(() => {
-    if (revealedAreas && points !== undefined) {
-      localStorage.setItem("revealedAreas", JSON.stringify(revealedAreas));
-      localStorage.setItem("points", points);
-      handleSaveProgress(revealedAreas, points);
+useEffect(() => {
+  if (revealedAreas && points !== undefined) {
+    localStorage.setItem("revealedAreas", JSON.stringify(revealedAreas));
+    localStorage.setItem("points", points);
+
+    // Якщо нова зона відкрита, додай очки
+    if (revealedAreas.length > points) {
+      setPoints(revealedAreas.length); // Оновлюємо очки відповідно до відкритих зон
     }
-  }, [revealedAreas, points]);
+
+    handleSaveProgress(revealedAreas, points); // Збереження прогресу
+  }
+}, [revealedAreas, points]);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -385,7 +385,7 @@ const MapWithFog = () => {
           >
             <CircleX />
           </button>
-          {!userName ? <LoginButton setUserName={setUserName} /> : ""}
+          {!userName && <LoginButton setUserName={setUserName} />}
 
           <button
             onClick={updatePosition}
@@ -401,7 +401,7 @@ const MapWithFog = () => {
               ? `Stop auto update. Updates: ${updateCount}`
               : `Start auto update. Updates: ${updateCount}`}
           </button>
-          
+
           <ControlLayout
             label="See distance (m)"
             value={radius}
