@@ -1,12 +1,10 @@
-/* eslint-disable react/prop-types */
-// Completed MapWithFog.jsx with Firestore Integration and Leaderboard Component
-import  { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer, useMap, Marker } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import personIconWalking from "./assets/person-walking.webp"; // Icon of a walking person
-import personIconStanding from "./assets/person-standing.gif"; 
-import { getLeaderboard } from "./firebase"; // Icon of a standing person
+import personIconWalking from "./assets/person-walking.webp";
+import personIconStanding from "./assets/person-standing.gif";
+import { getLeaderboard } from "./firebase";
 import {
   Settings,
   Plus,
@@ -21,31 +19,7 @@ import { saveUserProgress } from "./saveUserProgress";
 import { loadUserProgress } from "./loadUserProgress";
 import Leaderboard from "./Leaderboard";
 import { auth } from "./firebase";
-import { motion } from "framer-motion";
 import { getRedirectResult, GoogleAuthProvider } from "firebase/auth";
-
-const AnimatedMarker = ({ position, isWalking }) => {
-  return (
-    <motion.div
-      style={{
-        position: "absolute",
-        width: "30px",
-        height: "30px",
-        borderRadius: "50%",
-        backgroundImage: `url(${
-          isWalking ? personIconWalking : personIconStanding
-        })`,
-        backgroundSize: "cover",
-      }}
-      initial={{ x: position[0], y: position[1] }}
-      animate={{ x: position[0], y: position[1] }}
-      transition={{ duration: 1.5 }} // Плавний перехід з тривалістю 1.5 секунди
-    />
-  );
-};
-
-
-
 
 let worker = null;
 
@@ -65,10 +39,6 @@ const handleSaveProgress = async (revealedAreas, points) => {
   }
 };
 
-
-
-
-
 const RefreshLeaderboardButton = () => {
   const handleRefresh = async () => {
     const leaderboard = await getLeaderboard();
@@ -78,9 +48,9 @@ const RefreshLeaderboardButton = () => {
   return (
     <button
       onClick={handleRefresh}
-      className="px-4 py-2 text-white bg-blue-500 rounded-md hover:bg-blue-600"
+      className="px-4 py-2 text-white bg-blue-500 rounded-full hover:bg-blue-600 min-w-64 min-h-12"
     >
-      Оновити таблицю лідерів
+      Update leaderboard
     </button>
   );
 };
@@ -96,20 +66,13 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize, radius }) => {
     const ctx = canvas.getContext("2d");
     canvas.width = mapSize.width;
     canvas.height = mapSize.height;
-
     let animationFrameId;
-
     const animateFog = () => {
-      // Очищуємо попередній стан canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Малюємо туман на всій карті
       ctx.fillStyle = `rgba(0, 0, 0, ${fogOpacity})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Вирізаємо прозорі круги на місцях, де карта "відкрита"
       revealedAreas.forEach(({ lat, lng }) => {
-        const adjustedRadius = radius / Math.pow(2, 15 - zoom); // Scale radius based on zoom level
+        const adjustedRadius = radius / Math.pow(2, 15 - zoom);
         const point = map.latLngToContainerPoint([lat, lng]);
         const gradientRadius = adjustedRadius;
         const gradient = ctx.createRadialGradient(
@@ -130,14 +93,11 @@ const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize, radius }) => {
         ctx.fill();
         ctx.globalCompositeOperation = "source-over";
       });
-
       animationFrameId = requestAnimationFrame(animateFog);
     };
-
-    animateFog(); // Запускаємо анімацію
-
+    animateFog();
     return () => {
-      cancelAnimationFrame(animationFrameId); // Очищаємо анімацію при виході
+      cancelAnimationFrame(animationFrameId);
     };
   }, [revealedAreas, fogOpacity, mapSize, radius, map]);
 
@@ -160,10 +120,9 @@ const CenterMapOnPosition = ({ position }) => {
 
   useEffect(() => {
     if (position) {
-      // Плавне переміщення до нової позиції з анімацією
       map.setView(position, map.getZoom(), {
         animate: true,
-        duration: 1.5, // Тривалість анімації в секундах
+        duration: 3,
       });
     }
   }, [position, map]);
@@ -172,7 +131,7 @@ const CenterMapOnPosition = ({ position }) => {
 };
 
 const MapWithFog = () => {
-  const [userName, setUserName] = useState(null); // State to store the user's name
+  const [userName, setUserName] = useState(null);
   const [position, setPosition] = useState(null);
   const [radius, setRadius] = useState(20);
   const [fogOpacity, setFogOpacity] = useState(0.95);
@@ -181,7 +140,7 @@ const MapWithFog = () => {
     return savedAreas ? JSON.parse(savedAreas) : [];
   });
   const [autoUpdate, setAutoUpdate] = useState(false);
-  const [updateInterval, setUpdateInterval] = useState(1.0); // Update interval in seconds
+  const [updateInterval, setUpdateInterval] = useState(1.0);
   const [updateCount, setUpdateCount] = useState(0);
   const [points, setPoints] = useState(() => {
     const savedPoints = localStorage.getItem("points");
@@ -190,8 +149,8 @@ const MapWithFog = () => {
   const intervalRef = useRef(null);
   const [isWalking, setIsWalking] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-    const [lastUpdateTime, setLastUpdateTime] = useState(null); // Час останнього оновлення
-    const [smoothThreshold, setSmoothThreshold] = useState(10);
+  const [lastUpdateTime, setLastUpdateTime] = useState(null);
+  const [smoothThreshold, setSmoothThreshold] = useState(1);
 
   const updatePosition = () => {
     if (!navigator.geolocation) {
@@ -202,27 +161,22 @@ const MapWithFog = () => {
     navigator.geolocation.getCurrentPosition((pos) => {
       const { latitude, longitude } = pos.coords;
       const newPosition = [latitude, longitude];
-      const currentTime = Date.now(); // Час поточного оновлення
+      const currentTime = Date.now();
 
-      // Обчислюємо, скільки часу пройшло з моменту останнього оновлення
       if (lastUpdateTime) {
-        const timeDiff = (currentTime - lastUpdateTime) / 1000; // У секундах
+        const timeDiff = (currentTime - lastUpdateTime) / 1000;
         const isSmooth = timeDiff <= smoothThreshold;
 
-        // Плавне або різке переміщення
         map.setView(newPosition, map.getZoom(), {
-          animate: isSmooth, // Якщо час між оновленнями менший за поріг, переміщення плавне
-          duration: isSmooth ? 1.5 : 0, // Якщо анімація плавна, тривалість 1.5 секунди, інакше різке переміщення
+          animate: isSmooth,
+          duration: isSmooth ? 1.5 : 0,
         });
       } else {
-        // Якщо це перше оновлення, просто встановлюємо нову позицію
-        map.setView(newPosition, map.getZoom(), { animate: false });
+        map.setView(newPosition, map.getZoom(), { animate: true });
       }
 
-      // Оновлюємо стан
       setPosition(newPosition);
-      setLastUpdateTime(currentTime); // Зберігаємо час останнього оновлення
-
+      setLastUpdateTime(currentTime);
       setRevealedAreas((areas) => {
         const isAreaRevealed = areas.some(
           (area) =>
@@ -236,12 +190,12 @@ const MapWithFog = () => {
       });
     });
   };
+
   useEffect(() => {
-    // Обробляємо результат перенаправлення (тільки якщо було використано redirect)
     getRedirectResult(auth)
       .then((result) => {
         if (result) {
-          setUserName(result.user.displayName); // Встановлюємо ім'я користувача
+          setUserName(result.user.displayName);
         }
       })
       .catch((error) => {
@@ -250,114 +204,74 @@ const MapWithFog = () => {
   }, []);
 
   useEffect(() => {
-    const intervalId = setInterval(updatePosition, 5000); // Оновлення кожні 5 секунд
+    const intervalId = setInterval(updatePosition, 1000);
     return () => clearInterval(intervalId);
   }, [lastUpdateTime, smoothThreshold]);
 
-  //  const updatePosition = () => {
-  //    if (!navigator.geolocation) {
-  //      alert("Geolocation is not supported by your browser");
-  //      return;
-  //    }
+  const startAutoUpdate = () => {
+    setAutoUpdate(true);
+    if (worker) {
+      worker.postMessage({ action: "start", updateInterval });
+    }
+  };
 
-  //    navigator.geolocation.getCurrentPosition(
-  //      (pos) => {
-  //        const { latitude, longitude } = pos.coords;
-  //        const newPosition = [latitude, longitude];
-  //        setPosition(newPosition);
+  const stopAutoUpdate = () => {
+    setAutoUpdate(false);
+    if (worker) {
+      worker.postMessage({ action: "stop" });
+    }
+  };
 
-  //        setRevealedAreas((areas) => {
-  //          const isAreaRevealed = areas.some(
-  //            (area) =>
-  //              Math.abs(area.lat - latitude) < 0.0001 &&
-  //              Math.abs(area.lng - longitude) < 0.0001
-  //          );
-  //          if (!isAreaRevealed) {
-  //            return [...areas, { lat: latitude, lng: longitude }];
-  //          }
-  //          return areas;
-  //        });
-  //      },
-  //      (err) => {
-  //        console.error("Error getting geolocation:", err);
-  //        alert(
-  //          "Failed to get your location. Please check your browser settings."
-  //        );
-  //      },
-  //      { enableHighAccuracy: true }
-  //    );
-  //  };
+  useEffect(() => {
+    const updatePosition = () => {
+      if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser");
+        return;
+      }
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const { latitude, longitude } = pos.coords;
+        setPosition([latitude, longitude]);
+        setRevealedAreas((areas) => {
+          const isAreaRevealed = areas.some(
+            (area) =>
+              Math.abs(area.lat - latitude) < 0.0001 &&
+              Math.abs(area.lng - longitude) < 0.0001
+          );
+          if (!isAreaRevealed) {
+            return [...areas, { lat: latitude, lng: longitude }];
+          }
+          return areas;
+        });
+      });
+    };
+    const intervalId = setInterval(updatePosition, 5000); // Оновлення кожні 5 секунд
+    return () => clearInterval(intervalId);
+  }, []);
 
-   const startAutoUpdate = () => {
-     setAutoUpdate(true);
-     if (worker) {
-       worker.postMessage({ action: "start", updateInterval }); // Запускаємо оновлення через worker
-     }
-   };
-
-   const stopAutoUpdate = () => {
-     setAutoUpdate(false);
-     if (worker) {
-       worker.postMessage({ action: "stop" }); // Зупиняємо оновлення
-     }
-   };
-   useEffect(() => {
-     // Оновлюємо позицію гравця
-     const updatePosition = () => {
-       if (!navigator.geolocation) {
-         alert("Geolocation is not supported by your browser");
-         return;
-       }
-
-       navigator.geolocation.getCurrentPosition((pos) => {
-         const { latitude, longitude } = pos.coords;
-         setPosition([latitude, longitude]);
-
-         setRevealedAreas((areas) => {
-           const isAreaRevealed = areas.some(
-             (area) =>
-               Math.abs(area.lat - latitude) < 0.0001 &&
-               Math.abs(area.lng - longitude) < 0.0001
-           );
-           if (!isAreaRevealed) {
-             return [...areas, { lat: latitude, lng: longitude }];
-           }
-           return areas;
-         });
-       });
-     };
-
-     const intervalId = setInterval(updatePosition, 5000); // Оновлення кожні 5 секунд
-     return () => clearInterval(intervalId);
-   }, []);
-
-   useEffect(() => {
-     if (!autoUpdate) {
-       stopAutoUpdate(); // Зупиняємо, якщо автооновлення вимкнене
-     } else {
-       startAutoUpdate(); // Запускаємо, якщо автооновлення увімкнене
-     }
-   }, [autoUpdate]);
+  useEffect(() => {
+    if (!autoUpdate) {
+      stopAutoUpdate();
+    } else {
+      startAutoUpdate();
+    }
+  }, [autoUpdate]);
 
   useEffect(() => {
     if (typeof Worker !== "undefined") {
-      worker = new Worker("worker.js"); // Запускаємо Web Worker
+      worker = new Worker("worker.js");
     }
-
-    // Слухаємо повідомлення від Web Worker для оновлення позиції
     worker.onmessage = function (e) {
       if (e.data.type === "updatePosition") {
-        updatePosition(); // Функція для оновлення позиції і очищення туману
+        updatePosition();
       }
     };
-
     return () => {
-      if (worker) worker.terminate(); // Зупиняємо Web Worker при виході
+      if (worker) worker.terminate();
     };
   }, []);
-  
+
   useEffect(() => {
-    updatePosition(); // Update position and center map on page load
+    updatePosition();
     if (autoUpdate) {
       intervalRef.current = setInterval(updatePosition, updateInterval * 1000);
     } else {
@@ -370,21 +284,19 @@ const MapWithFog = () => {
     if (revealedAreas && points !== undefined) {
       localStorage.setItem("revealedAreas", JSON.stringify(revealedAreas));
       localStorage.setItem("points", points);
-      handleSaveProgress(revealedAreas, points); // Save progress when areas or points change
+      handleSaveProgress(revealedAreas, points);
     }
   }, [revealedAreas, points]);
 
   useEffect(() => {
-    // Check if the user is already logged in
     const user = auth.currentUser;
     if (user) {
-      setUserName(user.displayName); // Set the user's display name if logged in
+      setUserName(user.displayName);
     }
   }, []);
 
   useEffect(() => {
     const user = auth.currentUser;
-
     if (user) {
       loadUserProgress(user.uid)
         .then((userProgress) => {
@@ -410,7 +322,7 @@ const MapWithFog = () => {
   });
 
   const ControlLayout = ({ label, value, onIncrease, onDecrease }) => (
-    <div className="flex flex-col items-center w-full md:w-auto">
+    <div className="flex flex-col items-center w-full md:w-auto min-w-64">
       <span className="mb-1 text-sm font-medium text-gray-700">{label}</span>
       <div className="flex items-center gap-2">
         <button
@@ -434,40 +346,62 @@ const MapWithFog = () => {
 
   return (
     <div>
-      <div className="fixed top-6 left-20 z-[9999] w-full text-white text-xl">
-        {userName ? `Вітаємо, ${userName}!` : "Ви ще не увійшли."}
-      </div>
-      <button
-        onClick={() => setMenuOpen((prev) => !prev)}
-        className="fixed top-4 left-4 z-[9999] w-12 h-12 bg-gray-500 text-white rounded-full shadow hover:bg-gray-600 active:scale-95 flex items-center justify-center"
-      >
-        <Settings />
-      </button>
-      <button
-        onClick={() => setAutoUpdate((prev) => !prev)}
-        className={`fixed top-20 left-4 z-[9999] w-12 h-12 ${
-          autoUpdate ? "bg-red-500" : "bg-green-500"
-        } text-white rounded-full shadow hover:bg-gray-600 active:scale-95 flex items-center justify-center`}
-      >
-        {autoUpdate ? <Pause /> : <Play />}
-      </button>
-      <button
-        onClick={updatePosition}
-        className="fixed top-36 left-4 z-[9999] w-12 h-12 bg-blue-500 text-white rounded-full shadow hover:bg-blue-600 active:scale-95 flex items-center justify-center"
-      >
-        <RotateCcw />
-      </button>
-      <div className="fixed top-52 left-4 z-[9999] w-12 h-12 bg-emerald-800 text-white rounded-full shadow hover:bg-emerald-600 active:scale-95 flex items-center justify-center">
-        {points}
-      </div>
-      {menuOpen && (
-        <div className="fixed top-0 left-0 w-full p-4 bg-gray-100/80 backdrop-blur-sm shadow-md flex gap-4 flex-col z-[9999] space-y-4 md:flex-row md:space-y-0 md:space-x-6 items-center">
+      <div className="fixed top-4 left-4 z-[9999]">
+        <div className="flex flex-col gap-2">
+          <div className="grid w-full h-12 px-3 text-sm text-white rounded-full place-content-center bg-slate-500">
+            {userName ? `Hello, ${userName}!` : "Please login"}
+          </div>
           <button
             onClick={() => setMenuOpen((prev) => !prev)}
-            className="fixed top-4 left-4 z-[9999] w-12 h-12 bg-gray-500 text-white rounded-full shadow hover:bg-gray-600 active:scale-95 flex items-center justify-center"
+            className="flex items-center justify-center w-12 h-12 text-white bg-gray-500 rounded-full shadow hover:bg-gray-600 active:scale-95"
+          >
+            <Settings />
+          </button>
+          <button
+            onClick={() => setAutoUpdate((prev) => !prev)}
+            className={`w-12 h-12 ${
+              autoUpdate ? "bg-red-500" : "bg-green-500"
+            } text-white rounded-full shadow hover:bg-gray-600 active:scale-95 flex items-center justify-center`}
+          >
+            {autoUpdate ? <Pause /> : <Play />}
+          </button>
+          <button
+            onClick={updatePosition}
+            className="flex items-center justify-center w-12 h-12 text-white bg-blue-500 rounded-full shadow hover:bg-blue-600 active:scale-95"
+          >
+            <RotateCcw />
+          </button>
+          <div className="flex items-center justify-center w-12 h-12 text-white rounded-full shadow bg-emerald-800 hover:bg-emerald-600 active:scale-95">
+            {points}
+          </div>
+        </div>
+      </div>
+
+      {menuOpen && (
+        <div className="fixed top-0 left-0 w-full p-4 bg-gray-100/60 backdrop-blur-sm shadow-md flex gap-2 flex-col z-[9999] items-center">
+          <button
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className="fixed flex items-center justify-center w-12 h-12 text-white bg-gray-500 rounded-full shadow top-4 left-4 hover:bg-gray-600 active:scale-95"
           >
             <CircleX />
           </button>
+          {!userName ? <LoginButton setUserName={setUserName} /> : ""}
+
+          <button
+            onClick={updatePosition}
+            className="px-4 py-2 text-white bg-blue-500 rounded-full shadow min-h-12 min-w-64 hover:bg-blue-600 active:scale-95"
+          >
+            Update position
+          </button>
+          <button
+            onClick={() => setAutoUpdate((prev) => !prev)}
+            className="px-4 py-2 text-white bg-yellow-500 rounded-full shadow min-h-12 min-w-64 hover:bg-yellow-600 active:scale-95 md:w-auto"
+          >
+            {autoUpdate
+              ? `Stop auto update. Updates: ${updateCount}`
+              : `Start auto update. Updates: ${updateCount}`}
+          </button>
+          
           <ControlLayout
             label="See distance (m)"
             value={radius}
@@ -488,39 +422,11 @@ const MapWithFog = () => {
               setUpdateInterval((prev) => Math.max(prev - 0.5, 0.5))
             }
           />
-          <button
-            onClick={updatePosition}
-            className="w-full px-4 py-2 text-white bg-blue-500 rounded-full shadow hover:bg-blue-600 active:scale-95 md:w-auto"
-          >
-            Update position
-          </button>
-          <button
-            onClick={() => setAutoUpdate((prev) => !prev)}
-            className="w-full px-4 py-2 text-white bg-yellow-500 rounded-full shadow hover:bg-yellow-600 active:scale-95 md:w-auto"
-          >
-            {autoUpdate
-              ? `Stop auto update. Updates: ${updateCount}`
-              : `Start auto update. Updates: ${updateCount}`}
-          </button>
-          <div className="w-full px-4 py-2 text-sm font-medium text-center text-white rounded-full shadow bg-emerald-500 hover:bg-yellow-600 active:scale-95 md:w-auto">
-            Points: {points}
-          </div>
-          <div className="p-4 rounded shadow-lg">
-            <label>
-              плавного переміщення (секунди):
-              <input
-                type="number"
-                value={smoothThreshold}
-                onChange={(e) => setSmoothThreshold(Number(e.target.value))}
-                className="p-1 ml-2 border rounded"
-                min={0}
-                step={1}
-              />
-            </label>
-          </div>
           <RefreshLeaderboardButton />
-          <LoginButton setUserName={setUserName} />{" "}
-          {/* Pass setUserName to LoginButton */}
+          <div className="grid px-4 py-2 font-medium text-center text-white rounded-full shadow place-content-center min-h-12 min-w-64 bg-emerald-500 md:w-auto">
+            Your points: {points}
+          </div>
+
           <Leaderboard />
         </div>
       )}
@@ -528,7 +434,7 @@ const MapWithFog = () => {
         center={position || [50.4501, 30.5234]}
         zoom={18}
         style={{ height: "100vh", width: "100vw" }}
-        zoomControl={false} // Disable default zoom controls
+        zoomControl={false}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         {position && (

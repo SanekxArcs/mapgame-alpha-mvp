@@ -44,9 +44,9 @@ const LoginButton = ({ setUserName }) => {
       <button
         onClick={handleSignIn}
         disabled={loading}
-        className="px-4 py-2 text-white bg-blue-500 rounded-md hover:bg-blue-600"
+        className="px-4 py-2 text-white rounded-full bg-violet-500 hover:bg-violet-600 min-w-64 min-h-12"
       >
-        {loading ? "Завантаження..." : "Увійти через Google"}
+        {loading ? "Loading..." : "Login with Google"}
       </button>
     </div>
   );

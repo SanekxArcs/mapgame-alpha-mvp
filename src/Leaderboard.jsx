@@ -22,7 +22,7 @@ const Leaderboard = () => {
   }, []);
 
   if (loading) {
-    return <div>Завантаження...</div>;
+    return <div>Loading...</div>;
   }
 
   if (error) {
@@ -30,8 +30,8 @@ const Leaderboard = () => {
   }
 
   return (
-    <div>
-      <h2>Таблиця лідерів</h2>
+    <div className="grid p-2 bg-stone-300 rounded-3xl min-w-64 place-content-center min-h-12">
+      <h2>Leaderboard</h2>
       <ul>
         {leaders.map((leader, index) => (
           <li key={index}>
