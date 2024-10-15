@@ -1,17 +1,11 @@
-// MapWithFog.jsx
-
+// Completed MapWithFog.jsx with Firestore Integration and Leaderboard Component
 import React, { useState, useEffect, useRef } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  useMap,
-  Marker,
-  useMapEvents,
-} from "react-leaflet";
+import { MapContainer, TileLayer, useMap, Marker } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import personIconWalking from "./assets/person-walking.webp"; // Icon of a walking person
-import personIconStanding from "./assets/person-standing.gif"; // Icon of a standing person
+import personIconStanding from "./assets/person-standing.gif"; 
+import { getLeaderboard } from "./firebase"; // Icon of a standing person
 import {
   Settings,
   Plus,
@@ -21,8 +15,48 @@ import {
   Play,
   RotateCcw,
 } from "lucide-react";
+import LoginButton from "./LoginButton";
+import { saveUserProgress } from "./saveUserProgress";
+import { loadUserProgress } from "./loadUserProgress";
+import Leaderboard from "./Leaderboard";
+import { auth } from "./firebase";
 
-// CanvasOverlay component
+const handleSaveProgress = async (revealedAreas, points) => {
+  const user = auth.currentUser;
+
+  if (!user) {
+    console.warn("User is not logged in, skipping save progress.");
+    return;
+  }
+
+  try {
+    await saveUserProgress({ revealedAreas, score: points });
+    console.log("Progress saved successfully");
+  } catch (error) {
+    console.error("Failed to save progress:", error);
+  }
+};
+
+
+
+
+
+const RefreshLeaderboardButton = () => {
+  const handleRefresh = async () => {
+    const leaderboard = await getLeaderboard();
+    console.log("Updated Leaderboard:", leaderboard);
+  };
+
+  return (
+    <button
+      onClick={handleRefresh}
+      className="px-4 py-2 text-white bg-blue-500 rounded-md hover:bg-blue-600"
+    >
+      Оновити таблицю лідерів
+    </button>
+  );
+};
+
 const CanvasOverlay = ({ revealedAreas, fogOpacity, mapSize, radius }) => {
   const map = useMap();
   const zoom = map.getZoom();
@@ -95,6 +129,7 @@ const CenterMapOnPosition = ({ position }) => {
 };
 
 const MapWithFog = () => {
+  const [userName, setUserName] = useState(null); // State to store the user's name
   const [position, setPosition] = useState(null);
   const [radius, setRadius] = useState(20);
   const [fogOpacity, setFogOpacity] = useState(0.95);
@@ -163,40 +198,64 @@ const MapWithFog = () => {
   }, [autoUpdate, updateInterval]);
 
   useEffect(() => {
-    localStorage.setItem("revealedAreas", JSON.stringify(revealedAreas));
-  }, [revealedAreas]);
+    if (revealedAreas && points !== undefined) {
+      localStorage.setItem("revealedAreas", JSON.stringify(revealedAreas));
+      localStorage.setItem("points", points);
+      handleSaveProgress(revealedAreas, points); // Save progress when areas or points change
+    }
+  }, [revealedAreas, points]);
 
   useEffect(() => {
-    localStorage.setItem("points", points);
-  }, [points]);
+    // Check if the user is already logged in
+    const user = auth.currentUser;
+    if (user) {
+      setUserName(user.displayName); // Set the user's display name if logged in
+    }
+  }, []);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+
+    if (user) {
+      loadUserProgress(user.uid)
+        .then((userProgress) => {
+          setRevealedAreas(userProgress.revealedAreas);
+          setPoints(userProgress.score);
+        })
+        .catch((error) => {
+          console.error("Failed to load user progress:", error);
+        });
+    } else {
+      console.warn("User is not logged in, unable to load progress.");
+    }
+  }, [auth.currentUser]);
 
   const mapSize = { width: window.innerWidth, height: window.innerHeight };
 
-const personIcon = L.divIcon({
-  html: `<img src="${
-    isWalking ? personIconWalking : personIconStanding
-  }" style="width: 30px; height: 30px; border-radius: 100%;">`,
-  iconSize: [0, 0],
-  iconAnchor: [16, 16],
-});
-
+  const personIcon = L.divIcon({
+    html: `<img src="${
+      isWalking ? personIconWalking : personIconStanding
+    }" style="width: 30px; height: 30px; border-radius: 100%;">`,
+    iconSize: [0, 0],
+    iconAnchor: [16, 16],
+  });
 
   const ControlLayout = ({ label, value, onIncrease, onDecrease }) => (
     <div className="flex flex-col items-center w-full md:w-auto">
-      <span className="text-sm font-medium text-gray-700 mb-1">{label}</span>
-      <div className="flex gap-2 items-center">
+      <span className="mb-1 text-sm font-medium text-gray-700">{label}</span>
+      <div className="flex items-center gap-2">
         <button
           onClick={onDecrease}
-          className="w-10 h-10 grid place-content-center bg-gray-500 text-white font-black rounded-full shadow hover:bg-gray-600 active:scale-95"
+          className="grid w-10 h-10 font-black text-white bg-gray-500 rounded-full shadow place-content-center hover:bg-gray-600 active:scale-95"
         >
           <Minus />
         </button>
-        <div className="grid place-content-center text-lg font-semibold w-10 h-10 bg-gray-100 text-gray-600 rounded-full shadow">
+        <div className="grid w-10 h-10 text-lg font-semibold text-gray-600 bg-gray-100 rounded-full shadow place-content-center">
           {value}
         </div>
         <button
           onClick={onIncrease}
-          className="w-10 h-10 grid place-content-center bg-gray-500 text-white rounded-full font-black shadow hover:bg-gray-600 active:scale-95"
+          className="grid w-10 h-10 font-black text-white bg-gray-500 rounded-full shadow place-content-center hover:bg-gray-600 active:scale-95"
         >
           <Plus />
         </button>
@@ -204,28 +263,11 @@ const personIcon = L.divIcon({
     </div>
   );
 
-  const ZoomControls = () => {
-    const map = useMap();
-    return (
-      <div className="fixed bottom-20 right-4 flex flex-col gap-2 z-[9999]">
-        <button
-          onClick={() => map.zoomIn()}
-          className="w-12 h-12 bg-gray-500 text-white rounded-full shadow hover:bg-gray-600 active:scale-95 flex items-center justify-center"
-        >
-          <Plus />
-        </button>
-        <button
-          onClick={() => map.zoomOut()}
-          className="w-12 h-12 bg-gray-500 text-white rounded-full shadow hover:bg-gray-600 active:scale-95 flex items-center justify-center"
-        >
-          <Minus />
-        </button>
-      </div>
-    );
-  };
-
   return (
     <div>
+      <div className="fixed top-6 left-20 z-[9999] w-full text-white text-xl">
+        {userName ? `Вітаємо, ${userName}!` : "Ви ще не увійшли."}
+      </div>
       <button
         onClick={() => setMenuOpen((prev) => !prev)}
         className="fixed top-4 left-4 z-[9999] w-12 h-12 bg-gray-500 text-white rounded-full shadow hover:bg-gray-600 active:scale-95 flex items-center justify-center"
@@ -279,21 +321,25 @@ const personIcon = L.divIcon({
           />
           <button
             onClick={updatePosition}
-            className="px-4 py-2 bg-blue-500 text-white rounded-full shadow hover:bg-blue-600 active:scale-95 w-full md:w-auto"
+            className="w-full px-4 py-2 text-white bg-blue-500 rounded-full shadow hover:bg-blue-600 active:scale-95 md:w-auto"
           >
             Update position
           </button>
           <button
             onClick={() => setAutoUpdate((prev) => !prev)}
-            className="px-4 py-2 bg-yellow-500 text-white rounded-full shadow hover:bg-yellow-600 active:scale-95 w-full md:w-auto"
+            className="w-full px-4 py-2 text-white bg-yellow-500 rounded-full shadow hover:bg-yellow-600 active:scale-95 md:w-auto"
           >
             {autoUpdate
               ? `Stop auto update. Updates: ${updateCount}`
               : `Start auto update. Updates: ${updateCount}`}
           </button>
-          <div className="px-4 py-2 bg-emerald-500 text-white rounded-full shadow hover:bg-yellow-600 active:scale-95 w-full md:w-auto text-sm font-medium text-center">
+          <div className="w-full px-4 py-2 text-sm font-medium text-center text-white rounded-full shadow bg-emerald-500 hover:bg-yellow-600 active:scale-95 md:w-auto">
             Points: {points}
           </div>
+          <RefreshLeaderboardButton />
+          <LoginButton setUserName={setUserName} />{" "}
+          {/* Pass setUserName to LoginButton */}
+          <Leaderboard />
         </div>
       )}
       <MapContainer
@@ -315,7 +361,6 @@ const personIcon = L.divIcon({
           mapSize={mapSize}
           radius={radius}
         />
-        <ZoomControls />
       </MapContainer>
     </div>
   );
