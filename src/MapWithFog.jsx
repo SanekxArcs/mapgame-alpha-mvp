@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer, useMap, Marker } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
@@ -20,8 +21,6 @@ import { loadUserProgress } from "./loadUserProgress";
 import Leaderboard from "./Leaderboard";
 import { auth } from "./firebase";
 import { getRedirectResult, GoogleAuthProvider } from "firebase/auth";
-
-
 
 let worker = null;
 
